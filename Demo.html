@@ -1,0 +1,68 @@
+<html>
+
+	<head>
+		<script src="http://code.jquery.com/jquery-1.11.1.min.js" type="text/javascript"></script>  
+		<script>
+		/* for in & prototype */
+
+		var for_in_and_prototype = false,
+			obj_return = true
+
+		$(function(){
+			if (for_in_and_prototype){
+				console.log("For In & Prototype " );
+
+				var man = {
+					hands:2,
+					legs:2,
+					heads:1
+				}
+
+				if (typeof Object.prototype.clone === "undefined"){
+					Object.prototype.clone = function() {}
+				}
+
+				for (var i in man){
+					if (man.hasOwnProperty(i)){
+						console.log(i, ":", man[i])
+					}
+				}
+				console.log(" ------------------------------------------------------------------- ")
+				
+				for (var i in man){
+					console.log(i, ":", man[i])
+				}
+
+				
+				if (typeof Array.prototype.indexOf === "undefined") {
+					console.log("Array not has prototype indexOf");
+	        	} else {
+	        		console.log("Array has prototype indexOf");
+	        	}
+	        	console.log("=================================================================================================================================================== ")
+        	};
+        });
+		</script>
+
+		<script>
+			$(function(){
+				if (obj_return){
+
+					var Obj = function(){
+						this.name = "This is it"
+
+						var th = {}
+						th.name = "And that's that"
+						return th
+					}
+
+					var o = new Obj();
+					console.log(o.name);
+
+				}
+			});
+
+
+		</script>
+	</head>
+</html>
