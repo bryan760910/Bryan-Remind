@@ -41,21 +41,22 @@
 				text : "How are you"
 			});
 
-			// 將物件存在 tt 變數裡 <HTML B>
+			// Step 2 : 將物件存在 tt 變數裡 <HTML B>
 			var tt = $.tooltip("tt");
 
+			// Step 3 : Use Method 
 			// 使用我們剛剛提供的 mouseoverEvent method <HTML C>
 			tt.mouseoverEvent(function(){
-				alert("test")
+				alert("test");
 			});
 
 			// 或是直接綁定 <HTML D> (較不好的方法) 因為使用者根本不知道你綁定了什麼, 除非文件上有提
 			$("#tt").bind("afterMouseout" , function(){
-				alert("after")
+				alert("after");
 			});
 
 			// 使用我們剛剛提供的 changeColor method <HTML E>
-			tt.changeColor("green")
+			tt.changeColor("green");
 		})
 	</script>
 
