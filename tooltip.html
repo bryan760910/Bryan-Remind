@@ -3,6 +3,7 @@
 	<head>
 		<script src="http://code.jquery.com/jquery-1.11.1.min.js" type="text/javascript"></script>
 		<script src="tooltip.js" type="text/javascript"></script>  
+		<!-- CSS 當然可以再收到另一個 tooltip.css 但是方便先寫在 <HEAD> -->
 		<style>
 			.tooltip {
 				border:1px solid #000;
@@ -34,21 +35,27 @@
 
 	<script type="text/javascript">
 		$(function(){
+			// Step 1 : 找到元素並使用tooltip plugin <HTML A>
 			$("#tt").tooltip({
+				// 設定 tooltip 文字 (default value)
 				text : "How are you"
 			});
 
+			// 將物件存在 tt 變數裡 <HTML B>
 			var tt = $.tooltip("tt");
 
+			// 使用我們剛剛提供的 mouseoverEvent method <HTML C>
 			tt.mouseoverEvent(function(){
 				alert("test")
 			});
 
-			tt.changeColor("green")
-
+			// 或是直接綁定 <HTML D> (較不好的方法) 因為使用者根本不知道你綁定了什麼, 除非文件上有提
 			$("#tt").bind("afterMouseout" , function(){
 				alert("after")
 			});
+
+			// 使用我們剛剛提供的 changeColor method <HTML E>
+			tt.changeColor("green")
 		})
 	</script>
 
