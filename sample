@@ -1,0 +1,389 @@
+; (function ($) {
+    "use strict";
+
+    //修正IE9無法使用跨domain api的問題
+    $.support.cors = true;
+
+    $.fn.extend({
+        ETEmpSelectBox: function (options) {
+            options = $.extend({}, $.ETEmpSelectBox.defaults, options);
+            return this.each(function () {
+                $(this).data($.ETEmpSelectBox.defaults.pluginName)
+                if (!$.data(this, $.ETEmpSelectBox.defaults.pluginName)) {
+                    $.data(this, $.ETEmpSelectBox.defaults.pluginName, new $.ETEmpSelectBox(this, options));
+                }
+            });
+            options = null;
+        }
+    });
+
+    $.ETEmpSelectBox = function (input, options) {
+        if (arguments.length === 1 && typeof arguments[0] == "string") {
+            return $.data(document.getElementById(arguments[0]), $.ETEmpSelectBox.defaults.pluginName);
+        }
+
+        /*******************************
+        * 參數設定                     *
+        *******************************/
+        var self = this;
+        var apiSettings;
+        var $input = $(input);
+        var _selectedData = {};
+        var outputData = [];
+        var _initData = {};
+
+        /*******************************
+        * private funciton             *
+        *******************************/
+        /**
+         * 使用 NAME 時, 預設的初始化選項
+         */
+        var _init = function ($input, options) {
+            var str = "";
+            apiSettings = {
+                deptIds: options.deptIds,
+                empIds: options.empIds,
+                isAllLevels: options.isAllLevels,
+                isValidOnly: options.isValidOnly
+            };
+
+            if (parseInt(options.ulHeight) > 0) {
+                str = "max-height:" + options.ulHeight + "px; overflow: auto;"
+            }
+
+            var $inputBox = $("<div class='ETEmpSelect_input ETEmpDeptSelectBox_input'></div>");
+            var $Empinput = $("<input type='text' class='ETEmpSelect_text ETEmpDeptSelectBox_text' style='width:" + options.inputWidth + "px;'/>");
+            var $ul = $("<ul class='ETEmpSelect_menu ETEmpDeptSelectBox_menu'" + str + "'></ul>");
+
+            if (options.ulWidth) {
+                $ul.css("width", options.ulWidth)
+            }
+
+            $input.addClass("ETEmpSelect ETEmpDeptSelectBox");
+            $input.append($inputBox);
+            $input.append($ul);
+            $inputBox.append($Empinput);
+
+            if (options.empValue.length > 0) {
+                _formatEmpData(options.empValue, true);
+                _initData = $.extend(true, {}, _selectedData); 
+
+            }
+
+            $Empinput.autocomplete({
+                // 撈取資料
+                source: function (request, response) {
+                    $input.trigger("onBeforeMenuLoad");
+                    apiSettings.keyword = request.term;
+                    $.ajax({
+                        url: "https://api.evertrust.com.tw/deptemp/employee/get",
+                        method: "GET",
+                        cache: false,
+                        delay: options.delay,
+                        data: apiSettings
+                    }).done(function (data, textStatus, jqXHR) {
+                        var results = [], items;
+                        var pArray = {};
+
+                        if (/^[A-Za-z]\d{4}$/.test(apiSettings.keyword)) {
+                            if (_initData[apiSettings.keyword]) {
+                                if (!_selectedData[apiSettings.keyword]) {
+                                    pArray[apiSettings.keyword] = _initData[apiSettings.keyword];
+                                }
+                            }
+                        } else {
+                            // 模糊查詢
+                            if (Object.keys(_initData).length > 0) {
+                                $.each(_initData, function (i, d) {
+                                    if (d.empName.match(apiSettings.keyword)) {
+                                        if (!_selectedData[i]) {
+                                            pArray[i] = d;
+                                        };
+                                    };
+                                });
+                            };
+                        }
+
+                        items = data.data;
+                        results = $.map(items, function (val, i) {
+                            if (_selectedData[val.empId] === undefined) {
+                                if (val.leaveDate) {
+                                    var labelText = val.empName + " (" + val.empId + ") - 離職";
+                                } else {
+                                    var labelText = val.empName + " (" + val.empId + ")";
+                                }
+                                return { trueValue: val.empId, value: labelText, label: labelText, empName: val.empName, detail: val };
+                            }
+                        });
+                        if (pArray) {
+                            $.each(pArray, function (i, d) {
+                                var a = $.grep(results, function (e) {
+                                    return e.empName == d.empName;
+                                });
+                                if (a.length === 0) {
+                                    results.push(d)
+                                }
+                            });
+                        
+                            
+                        }
+                        response(results);
+
+                    }).fail(function (jqXHR, textStatus, errorThrown) {
+
+                    }).always(function (data_jqXHR, textStatus, jqXHR_errorThrown) {
+
+                    });
+                },
+                select: function (event, ui) {
+                    if (Object.keys(_selectedData).length < options.maxLength || !options.maxLength) {
+                        _formatEmpData(ui.item.trueValue, true);
+                    };
+                    setTimeout(function () { $Empinput.val(""); }, 0);
+                },
+                close: function (event, ui) {
+                },
+                response: function () {
+                    $input.trigger("onAfterMenuLoad");
+                }
+            });
+
+            //$("body").on("menuselect", ".ui-autocomplete", function () {
+            //    $Empinput.val("");
+            //});
+
+            $input.on("click", ".close", function () {
+                var $li = $(this).parent(".chose_item")
+                var value = $li.attr("data-value");
+
+                _removeItem([value], true);
+            });
+
+            if (options.ulhide == true) {
+                $ul.css("display", "none");
+            }
+        };
+
+        /**
+        * 移除選項
+        * @param data{array} 員編陣列 Ex: ["F7369", "F1234", "F5678"]
+        * @param UIremove{Boolean} 是否畫面同步處理，False 即為只有資料更新，但畫面不移除。
+        */
+        var _removeItem = function (data, UIremove) {
+            $input.trigger("onBeforeChange");
+            var $ul = $input.find(".ETEmpSelect_menu");
+            outputData = [];
+            $.each(data, function (i, d) {
+                if (_selectedData[d]) {
+                    delete _selectedData[d];
+                    if (UIremove) {
+                        $ul.find(".chose_item[data-value='" + d + "']").remove();
+                    }
+                };
+
+            });
+            $.each(_selectedData, function (i, d) {
+                outputData.push(d.detail);
+            });
+            $input.trigger("onAfterChange");
+        }
+
+        /**
+        * 取得所有員編資料
+        * @param empValue{array} 員編陣列 Ex: ["F7369", "F1234", "F5678"]
+        */
+        var _getEmpData = function (empValue) {
+            var apiSettings = {
+                empIds: empValue,
+                isAllLevels: false,
+                isValidOnly: false
+            };
+            var output;
+
+            $.ajax({
+                url: "https://api.evertrust.com.tw/deptemp/employee/get",
+                method: "GET",
+                cache: false,
+                data: apiSettings,
+                async: false
+            }).done(function (data, textStatus, jqXHR) {
+                output = data.data;
+            }).fail(function (jqXHR, textStatus, errorThrown) {
+            }).always(function (data_jqXHR, textStatus, jqXHR_errorThrown) {
+            });
+            return output;
+        };
+
+        /**
+        * 員工編號轉換成元件可運用之Data
+        * @param data{array} 員編陣列 Ex: ["F7369", "F1234", "F5678"]
+        * @param UIadd{Boolean} 是否畫面同步處理，False 即為只有資料更新，但畫面不增加。
+        */
+        var _formatEmpData = function (data, UIadd) {
+            $input.trigger("onBeforeChange");
+            var $ul = $input.find(".ETEmpSelect_menu");
+            var empData = _getEmpData(data);
+
+            $.each(empData, function (i, d) {
+                if (!_selectedData[d.empId]) {
+                    if (d.leaveDate) {
+                        var labelText = d.empName + " (" + d.empId + ") - 離職";
+                    } else {
+                        var labelText = d.empName + " (" + d.empId + ")";
+                    }
+                    _selectedData[d.empId] = { value: d.empId, label: labelText, empName: d.empName, detail: d };
+                    if (UIadd){
+                        _uiAddEmpItem(_selectedData[d.empId], $ul);
+                    }
+                    outputData.push(d);
+                };
+            });
+            $input.trigger("onAfterChange");
+        }
+
+        /**
+        * 員工編號轉換成元件可運用之Data
+        * @param data{object} 員工資料
+        * @param target{Dom Object} 增加到哪個Dom元素。
+        */
+        var _uiAddEmpItem = function (data, target) {
+            var items = $('<li class="chose_item" data-value="' + data.value + '" title="' + data.detail.parentDeptName + " " + data.detail.deptName + '">' + data.label + '<a class="close" href="JavaScript:;"></a></li>');
+            target.append(items);
+        }
+
+        
+        _init($input, options);
+
+        /*******************************
+        * Public Function              *
+        *******************************/
+        /**
+        * 取得所有員工資料
+        * @return {array}
+        */
+        self.getSelectData = function () {
+            return outputData;
+        };
+
+        /**
+        * 取得所有員工編號
+        * @return {array}
+        */
+        self.getSelectValue = function () {
+            var outputArray = [];
+            if (outputData) {
+                $.map(outputData, function (val, i) {
+                    outputArray.push(val.empId);
+                });
+            };
+            return outputArray;
+        };
+
+        /**
+        * 取得所有員工名稱
+        * @return {array}
+        */
+        self.getSelectName = function () {
+            var outputArray = [];
+            if (outputData) {
+                $.map(outputData, function (val, i) {
+                    outputArray.push(val.empName);
+                });
+            };
+            return outputArray;
+        };
+
+        /**
+        * 清空 select 值
+        */
+        self.clearAll = function () {
+            _selectedData = {};
+            outputData = [];
+            $input.find(".chose_item").remove();
+        };
+
+        /**
+        * 還原預設值
+        */
+        self.reset = function () {
+            this.clearAll();
+            var pa = []
+            if (_initData) {
+                $.each(_initData, function (i, d) {
+                    pa.push(i)
+                });
+            };
+            _formatEmpData(pa, true);
+        }
+
+        /**
+        * 增加值(員編)
+        * param data{array} 員工編號陣列 Ex: ["F7369", "F1234", "F5678"]
+        */
+        self.addItem = function (data) {
+            _formatEmpData(data, true);
+        };
+
+        /**
+        * 移除值(員編)
+        * param data{array} 員工編號陣列 Ex: ["F7369", "F1234", "F5678"]
+        */
+        self.removeItem = function (data) {
+            _removeItem(data, true);
+        };
+        
+        /**
+        * 換值之後觸發事件
+        * param callback{function} 換值之後觸發事件函式
+        */
+        self.onAfterChange = function (callback) {
+            $input.on("onAfterChange", callback);
+        };
+
+        /**
+        * 換值之前觸發事件
+        * param callback{function} 換值之後觸發事件函式
+        */
+        self.onBeforeChange = function (callback) {
+            $input.on("onBeforeChange", callback);
+        };
+
+        /**
+        * 選單讀取資料之前
+        * param callback{function} 換值之後觸發事件函式
+        */
+        self.onBeforeMenuLoad = function (callback) {
+            $input.on("onBeforeMenuLoad", callback);
+        };
+
+        /**
+        * 選單讀取資料之後
+        * param callback{function} 換值之後觸發事件函式
+        */
+        self.onAfterMenuLoad = function (callback) {
+            $input.on("onAfterMenuLoad", callback);
+        };
+        
+    }
+
+
+
+
+    /*******************************
+    * 設定物件的初始設定           *
+    *******************************/
+    $.ETEmpSelectBox.defaults = {
+        inputWidth: 175,
+        // ulWidth: 750,
+        pluginName: "ETEmpSelectBox",
+        delay: 250,
+        multiple: false,
+        readonly: false,
+        empIds: [],
+        deptIds: [],
+        isAllLevels: true,
+        isValidOnly: true,
+        empValue: [],
+        ulhide: false
+    };
+})(jQuery); // 傳入 Jquery 物件
