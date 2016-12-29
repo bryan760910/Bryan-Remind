@@ -1,0 +1,341 @@
+var BusinessDist = BusinessDist || {};
+
+(function (base) {
+    base.maps = {
+        markers: [],
+        setMapInit: function () {
+            this.mapObj = new google.maps.Map(document.getElementById('map-canvas'), {
+                center: { lat: 0, lng: 0 },
+                zoom: 0,
+                draggable: false,
+                scrollwheel: false,
+                disableDoubleClickZoom: true,
+                streetViewControl: false,
+                zoomControl: false,
+                mapTypeControl: false
+            });
+        },
+        clearMapMarkers: function () {
+            var markers = this.markers;
+            for (var i = 0; i < markers.length; i++) {
+                markers[i].setMap(null);
+            }
+            markers = [];
+        },
+        drawObjPionts: function (d) {
+            var BDMap = this.mapObj;
+            var markers = this.markers;
+
+            $.each(d.Data.CaseDatas, function (i, e) {
+                var color = "";
+                var content;
+
+                switch (e.CaseGroup) {
+                    case "N":
+                    case "5":
+                    case "6":
+                    case "7":
+                        color = "green";
+                        break;
+                    case "4":
+                    case "3":
+                        color = "yellow";
+                        break;
+                    case "2":
+                    case "1":
+                    case "E":
+                        color = "red";
+                        break;
+
+                }
+                content = '<a class="circle on-map ' + color + '" data-caseno="' + e.CaseNo + '" href="' + e.DetailUrl + '" target="_blank"></a>';
+                //console.log(e.CoordinateY, e.CoordinateX);
+                if ((e.CoordinateY != "" || 0) && (e.CoordinateX != "" || 0)) {
+                    var marker = new RichMarker({
+                        position: new google.maps.LatLng(e.CoordinateY, e.CoordinateX),
+                        map: BDMap,
+                        draggable: false,
+                        shadow: 'none',
+                        content: content
+                    });
+                    markers.push(marker);
+                }
+                
+            });
+        },
+        drawStorePionts: function (d) {
+            // console.log(d.Data);
+            var BDMap = this.mapObj;
+            $.each(d.Data, function (i, e) {
+                var image = {
+                    url: '../Res/images/map_icon_yc_store.png',
+                    anchor: new google.maps.Point(15, 15),
+                    size: new google.maps.Size(31, 31),
+                    origin: new google.maps.Point(0, 0),
+                };
+                new google.maps.Marker({
+                    position: new google.maps.LatLng(e.coordinatey2, e.coordinatex2),
+                    map: BDMap,
+                    draggable: false,
+                    icon: image
+                });
+
+            });
+        },
+        storePolyArea: function (d) {
+
+            this.data = [];
+            this.draw = function () {
+                var da = this.data;
+                $.each(d.Data.StrategyMaps, function (i, e) {
+                    var triangleCoords = [];
+                    var outobj = {};
+                    outobj.latlngs = [];
+                    // console.log(e.PointList)
+
+                    $.each(e.PointList, function (i,e) {
+                        var obj = {};
+                        obj.lat = e.CoordinateY;
+                        obj.lng = e.CoordinateX
+                        triangleCoords.push(obj);
+                        outobj.latlngs.push(new google.maps.LatLng(e.CoordinateY, e.CoordinateX))
+                    });
+
+                    var bermudaTriangle = new google.maps.Polygon({
+                        paths: triangleCoords,
+                        strokeColor: '#F00000',
+                        strokeOpacity: 0.8,
+                        strokeWeight: 1,
+                        fillColor: '#F00000',
+                        fillOpacity: 0.1
+                    });
+
+                    bermudaTriangle.setMap(BusinessDist.maps.mapObj);
+                    da.push(outobj);
+
+                });
+            }
+            this.setPosition = function () {
+                var latlngbounds = new google.maps.LatLngBounds();
+                for (var i = 0; i < this.data.length; i++) {
+                    for (var j = 0; j < this.data[i].latlngs.length; j++) {
+                        latlngbounds.extend(this.data[i].latlngs[j]);
+
+                    }
+                }
+
+                BusinessDist.maps.mapObj.fitBounds(latlngbounds);
+            }
+            
+        }
+    },
+    base.data = {
+        getEmpNo: function () {
+            var emp = $("#Emp1_Emp").val();
+            return emp;
+        },
+        getNewGjcObj: function () {
+            return new ETLib.Comm.GatewayJsonClient("../../BD/BusinessDist/BusinessDist_GetData.ashx"); // TODO : 切換 URL
+        },
+        getStoreGjcSetting: function () {
+            var gjc = this.getNewGjcObj();
+            gjc.Method = "GetStore";
+            gjc.Encoding = 0;
+            gjc.AutoEncodeValue = false;
+            gjc.JsonData.RequestJsonInput = {
+                EmpNo: this.getEmpNo()
+            };
+            return gjc;
+            
+        },
+        getStrategyMapGjcSetting: function () {
+            var gjc = this.getNewGjcObj();
+            gjc.Method = "GetStrategyMap";
+            gjc.Encoding = 0;
+            gjc.AutoEncodeValue = false;
+            gjc.JsonData.RequestJsonInput = {
+                EmpNo: this.getEmpNo()
+            };
+            return gjc;
+        },
+        getCaseDataGjcSetting: function () {
+            var gjc = this.getNewGjcObj();
+            gjc.Method = "GetCaseData";
+            gjc.Encoding = 0;
+            gjc.AutoEncodeValue = false;
+            gjc.JsonData.RequestJsonInput = {
+                EmpNo: this.getEmpNo()
+            };
+            return gjc;
+        }
+
+    },
+    base.chart = {
+        draw: function (d) {
+            console.log(d.Data)
+            var debugArray = []; //debug
+            
+            $.each(d.Data.CaseDatas, function (i, e) {
+                var caseType = this.CaseType;
+                var caseGroup = this.CaseGroup;
+                var xAxisClass;
+                var yAxisClass;
+                var htmlStr;
+                var debugObj = {} //debug
+                //console.log(e);
+
+                switch (caseGroup) {
+                    case "N":  
+                        xAxisClass = "no-price";
+                        break;
+                    case "E":  
+                        xAxisClass = "under0";
+                        break;
+                    case "1":  
+                        xAxisClass = "r_0to5";
+                        break;
+                    case "2":  
+                        xAxisClass = "r_5to10";
+                        break;
+                    case "3":  
+                        xAxisClass = "r_10to15";
+                        break;
+                    case "4":  
+                        xAxisClass = "r_15to20";
+                        break;
+                    case "5":  
+                        xAxisClass = "r_20to25";
+                        break;
+                    case "6":  
+                    case "7":
+                        xAxisClass = "r_25up";
+                        break;
+                    default:
+                        xAxisClass = "";
+                        break;
+                }
+
+                switch (caseType) {
+                    case "MP":  // 上市
+                        yAxisClass = "on-market";
+                        htmlStr = '<a class="circle" title="預估差價 : ' + e.CaseDrop + '% &#013;物件門牌 : ' + e.CaseAddress + '&#013;" href="' + e.DetailUrl + '" target="_blank" data-caseno="' + e.CaseNo + '"></a>';
+                        break;
+                    case "TR":  // 追蹤
+                        yAxisClass = "track";
+                        htmlStr = '<a class="circle" title="預估差價 : ' + e.CaseDrop + '% &#013;物件門牌 : ' + e.CaseAddress + '&#013;" href="' + e.DetailUrl + '" target="_blank" data-caseno="' + e.CaseNo + '"></a>';
+                        break;
+                    case "LI":  // 庫存
+                        yAxisClass = "in-stock";
+                        htmlStr = '<a class="circle" title="預估差價 : ' + e.CaseDrop + '% &#013;物件編號 : ' + e.CaseNo + '&#013;物件門牌 : ' + e.CaseAddress + '&#013;" href="' + e.DetailUrl + '" target="_blank" data-caseno="' + e.CaseNo + '"></a>';
+                        break;
+                    default:
+                        yAxisClass = "";
+                        break;
+                }
+
+                if (xAxisClass != "" && yAxisClass != "") {
+                    $(".bd-point-table").find("." + xAxisClass).find("." + yAxisClass).append(htmlStr);
+                    debugObj.CaseName = e.CaseName;
+                    debugObj.CaseAddress = e.CaseAddress;
+                    debugObj.caseno = e.CaseNo;
+                    debugObj.type = yAxisClass;
+                    debugObj.range = xAxisClass;
+                    
+                    
+                    debugArray.push(debugObj);
+                };
+
+                
+            });
+            console.table(debugArray);
+        },
+        clear: function () {
+            $(".estimated-content").find(".circle").remove();
+        }
+    },
+    (function() {
+        $(".businessDist-map").css("min-height", $(window).height() - 200 + "px");
+        $(".businessDist-map").css("height", $(window).height() - 200 + "px");
+        $(".businessDist-map").on("hover", ".circle", function (e) {
+            var caseNo = $(this).attr("data-caseno");
+            if (e.type == "mouseenter") {
+                $(".businessDist-map .circle[data-caseno='" + caseNo + "']").addClass("fill");
+            } else {
+                $(".businessDist-map .circle[data-caseno='" + caseNo + "']").removeClass("fill");
+            }
+        });
+
+        $("body").on("click", ".bd-menu > li", function (e, d) {
+            $(".estimated-content").addClass("display_none");
+            $("." + $(this).attr("data-content")).removeClass("display_none");
+            $(".bd-menu > li").removeClass("active");
+            $(this).addClass("active");
+        });
+        $("#map-canvas").height("100%");
+
+        var chart = base.chart;
+        var BDMap = base.maps;
+        base.maps.setMapInit();
+
+        $("#Emp1_Emp").bind("onAfterDataBind", function (e, args) {
+
+            var caseDataGjcObj = base.data.getCaseDataGjcSetting();
+            var StoreGjcObj = base.data.getStoreGjcSetting();
+            var StorePolyAreaObj = base.data.getStrategyMapGjcSetting();
+
+
+
+            StoreGjcObj.Submit(
+                function Success() {
+                    BDMap.drawStorePionts(StoreGjcObj.JsonData.ResponseJsonOutputOrigin);
+                },
+                function Fail(jqXHR, textStatus, errorThrown) {
+                    alert(textStatus);
+                }
+            );
+
+            caseDataGjcObj.Submit(
+                function Success() {
+                    chart.draw(caseDataGjcObj.JsonData.ResponseJsonOutputOrigin);
+                    BDMap.drawObjPionts(caseDataGjcObj.JsonData.ResponseJsonOutputOrigin);
+                },
+                function Fail(jqXHR, textStatus, errorThrown) {
+                    alert(textStatus);
+                }
+            );
+
+            StorePolyAreaObj.Submit(
+                function Success() {
+                    var storePoly = new BDMap.storePolyArea(StorePolyAreaObj.JsonData.ResponseJsonOutputOrigin);
+                    storePoly.draw()
+                    storePoly.setPosition();
+                },
+                function Fail(jqXHR, textStatus, errorThrown) {
+                    alert(textStatus);
+                }
+            );
+        });
+
+        $("#Emp1_Emp").bind("change", function (e, args) {
+
+            chart.clear();
+            BDMap.clearMapMarkers();
+            var caseDataGjcObj = base.data.getCaseDataGjcSetting();
+
+            caseDataGjcObj.Submit(
+                function Success() {
+                    chart.draw(caseDataGjcObj.JsonData.ResponseJsonOutputOrigin);
+                    BDMap.drawObjPionts(caseDataGjcObj.JsonData.ResponseJsonOutputOrigin);
+                },
+                function Fail(jqXHR, textStatus, errorThrown) {
+                    alert(textStatus);
+                }
+            );
+
+        });
+
+        
+
+    })();
+    
+})(BusinessDist || (BusinessDist = {}));
