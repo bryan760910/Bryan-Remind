@@ -1,0 +1,658 @@
+
+var ET5 = ET5 || {};
+
+/**
+ * 遊戲化
+ * @namespace ET5.ETGame
+ */
+ET5.ETGame = {
+    /**
+     * 程式版本
+     * @namespace ET5.ETGame.Version
+     * 
+     * @property {Number} index 首頁
+     * @property {Number} fight 戰鬥頁
+     */
+    Version: {
+        index: 1,
+        fight: 1    
+    },
+    /**
+     * 共用程式
+     * @namespace ET5.ETGame.Master
+     */
+    Master: {
+        /**
+         * 鎖定畫面
+         * @name ET5.ETGame.Master#block
+         * @method
+         * 
+         * @param {String} text loading文案
+         */
+        block: (function (text) {
+            var show = "<div class=\"ETGloader\"><div style=\"width:400px; height:225px;\"></div></div>"
+            $.blockUI({
+                message: show,
+                css: {
+                    border: "0", background: "transparent"
+                }
+            });
+        }),
+        /**
+         * 解除鎖定畫面
+         * @name ET5.ETGame.Master#unblock
+         * @method
+         */
+        unblock: (function () {
+            $.unblockUI();
+        }),
+        /**
+         * 系統訊息框
+         * @name ET5.ETGame.Master#windowSimpleMsg
+         * @method
+         * 
+         * @param {String} msg 訊息文字
+         */
+        windowSimpleMsg: (function (msg){
+            var $outerFancy = '<div class="g_module fancybox" id="fancybox_w_repeat_error"><div class="g_module_inside"><div class="g_module_wapper clearfix"><table class="simple_msg_block"><tr><td>'+msg+'</td></tr></table></div></div></div>';
+            $("body").append($outerFancy);
+
+            $.fancybox({
+                width: "580",
+                height: "auto",
+                type: "inline",
+                href: "#fancybox_w_repeat_error",
+                padding: 0,
+                margin: 0,
+                autoSize: false,
+                scrolling: false,
+                closeBtn: false,
+                tpl: {
+                    wrap: '<div class="fancybox-wrap" tabIndex="-1"><div class="fancybox-skin" ><div class="fancybox-outer"><div class="fancybox-inner" style="overflow: visible;"></div></div></div></div>'
+                },
+                helpers:{
+                    overlay: {
+                        closeClick: false
+                    }
+                }
+            });
+        }),
+        /**
+         * 進度條物件
+         * @namespace ET5.ETGame.Master.ProgressBar
+         * @class
+         * 
+         * @param {Object} input 初始化DOM元素
+         * @param {Object} initialSetting 初始化設定
+         * @param {Number} initialSetting.nowHealth 目前數量
+         * @param {Number} initialSetting.fullHealth 總數量
+         * @param {Object} initialSetting.nowHealthObj 目前數量顯示的區塊DOM元素
+         * @param {Object} initialSetting.fullHealthObj 總數量顯示的區塊DOM元素
+         * @param {Number} initialSetting.runTime 動畫執行時間(豪秒)
+         */
+        ProgressBar: function (input, initialSetting) {
+            "use strict";
+            var self = this;
+            var $input = $(input);
+            var healthPercent = Math.round((initialSetting.nowHealth / initialSetting.fullHealth) * 100);
+            if (healthPercent >= 100) { healthPercent = 100; };
+            if (healthPercent <= 0) { healthPercent = 0; };
+            Object.defineProperty(self, "input", { get: function () { return input; } });
+            Object.defineProperty(self, "initialSetting", {
+                get: function () { return initialSetting; }, set: function (e) {
+                    initialSetting = e;
+                }
+            });
+
+            var _init = function () {
+                $input.append('<div class="etg_health_line" style="width: ' + healthPercent + '%;"></div>');
+                $input.append('<div class="etg_health_bgline"></div>');
+                if (initialSetting.fullHealthObj) {
+                    $(initialSetting.fullHealthObj).text(initialSetting.fullHealth)
+                }
+                if (initialSetting.nowHealthObj) {
+                    $(initialSetting.nowHealthObj).text(initialSetting.nowHealth)
+                }
+                //if (initialSetting.showNumber){
+                //    $input.append('<div class="etg_health_number">' + initialSetting.nowHealth + '</div>');
+                //}
+            };
+
+            ET5.ETGame.Master.ProgressBar.prototype.changeHealth = function (surplusHealth) {
+                "use strict";
+                var input = this.input;
+                var initialSetting = this.initialSetting;
+                var percent = Math.round((surplusHealth / initialSetting.fullHealth) * 100);
+                if (percent >= 100) { percent = 100; };
+                if (percent <= 0) { percent = 0; };
+                $(input).trigger("beforeAnimation");
+                // Change Health Width
+                $(input).find(".etg_health_line").animate({ width: percent + "%" }, initialSetting.runTime, "swing", function () { $(input).trigger("afterAnimation"); });
+
+                if (!initialSetting.statusValue && initialSetting.statusValue !== 0) {
+                    initialSetting.statusValue = initialSetting.nowHealth
+                }
+
+                // Run Health Value
+                $({ Counter: initialSetting.statusValue }).animate({ Counter: surplusHealth }, {
+                    duration: initialSetting.runTime,
+                    easing: 'swing',
+                    step: function () {
+                        $(initialSetting.nowHealthObj).text(Math.floor(this.Counter));
+                    },
+                    complete: function () {
+                        $(initialSetting.nowHealthObj).text(surplusHealth);
+                        initialSetting.statusValue = surplusHealth;
+                    }
+                });
+            }
+
+            if (!$input.data("ProgressBar")) {
+                _init();
+                $input.data("ProgressBar", self);
+            };
+        },
+        /**
+         * 轉盤物件
+         * @namespace ET5.ETGame.Master.GameCarousel
+         * @class
+         * 
+         * @param {Object} input 初始化DOM元素
+         * @param {Object} carouselSetting 初始化設定
+         * @param {Number} carouselSetting.circleCount 轉盤圓圈數量
+         * @param {Number} carouselSetting.circlediameter 轉盤圓圈直徑
+         * @param {String} carouselSetting.circleBGColor 轉盤圓圈背景色
+         * @param {Number} carouselSetting.gameCarouselRadius 轉盤半徑
+         */
+        GameCarousel: function (input, carouselSetting) {
+            "use strict";
+            var self = this;
+            var $input = $(input);
+
+            Object.defineProperty(self, "input", { get: function () { return input; } });
+            Object.defineProperty(self, "initialSetting", {
+                get: function () { return carouselSetting; }, set: function (e) {
+                    carouselSetting = e;
+                }
+            });
+
+            var _bindAnimationEvent = function () {
+                $("body").on("animationend webkitAnimationEnd oAnimationEnd MSAnimationEnd", ".flicker0", function () {
+                    if ($(this).next(".game_carousel_circle").length > 0) {
+                        $(this).next(".game_carousel_circle").addClass("flicker0");
+                    } else {
+                        $input.find('#game_carousel_circle_1').find(".game_carousel_circle_son").addClass("flicker1");
+                    }
+                }).on("animationend webkitAnimationEnd oAnimationEnd MSAnimationEnd", ".flicker1", function () {
+                    if ($(this).parent(".game_carousel_circle").next().find(".game_carousel_circle_son").length > 0) {
+                        $(this).parent(".game_carousel_circle").next().find(".game_carousel_circle_son").addClass("flicker1");
+                    } else {
+                        $input.find('#game_carousel_circle_1').find(".game_carousel_circle_son").addClass("flicker2");
+                    }
+                }).on("animationend webkitAnimationEnd oAnimationEnd MSAnimationEnd", ".flicker2", function () {
+                    if ($(this).parent(".game_carousel_circle").next().find(".game_carousel_circle_son").length > 0) {
+                        $(this).parent(".game_carousel_circle").next().find(".game_carousel_circle_son").addClass("flicker2");
+                    } else {
+                        $input.find('#game_carousel_circle_1').find(".game_carousel_circle_son").addClass("flicker3");
+                    }
+                }).on("animationend webkitAnimationEnd oAnimationEnd MSAnimationEnd", ".flicker3", function () {
+                    if ($(this).parent(".game_carousel_circle").hasClass("stopthis")) {
+                        $(this).addClass("flicker4");
+                    } else {
+                        $(this).parent(".game_carousel_circle").next().find(".game_carousel_circle_son").addClass("flicker3");
+                    }
+                }).on("animationend webkitAnimationEnd oAnimationEnd MSAnimationEnd", ".flicker4", function () {
+                    $input.addClass("rscale");
+                }).on("animationend webkitAnimationEnd oAnimationEnd MSAnimationEnd", ".rscale", function () {
+                    $input.css("display", "none");
+                    $input.find(".game_carousel_circle").removeClass("flicker0");
+                    $input.find(".game_carousel_circle").removeClass("stopthis");
+                    $input.find(".game_carousel_circle_son").removeClass("flicker1");
+                    $input.find(".game_carousel_circle_son").removeClass("flicker2");
+                    $input.find(".game_carousel_circle_son").removeClass("flicker3");
+                    $input.find(".game_carousel_circle_son").removeClass("flicker4");
+                    $(this).removeClass("rscale");
+                    $input.trigger("afterAnimation");
+                });
+            };
+
+            var _init = function () {
+                var div = 360 / carouselSetting.circleCount;
+                var offsetToParentCenter = parseInt(input.offsetWidth / 2);  //assumes parent is square
+                var circleCenter = 80 * carouselSetting.circlediameter / 160;
+                var totalOffset = offsetToParentCenter - circleCenter;
+                for (var i = 1; i <= carouselSetting.circleCount; ++i) {
+                    var childdiv = document.createElement('div');
+                    childdiv.id = 'game_carousel_circle_' + i;
+                    childdiv.className = 'game_carousel_circle';
+                    childdiv.style.position = 'absolute';
+                    childdiv.style.width = carouselSetting.circlediameter + "px";
+                    childdiv.style.height = carouselSetting.circlediameter + "px";
+                    childdiv.style.background = carouselSetting.circleBGColor;
+                    var y = Math.sin((div * i) * (Math.PI / 180)) * carouselSetting.gameCarouselRadius;
+                    var x = Math.cos((div * i) * (Math.PI / 180)) * carouselSetting.gameCarouselRadius;
+                    childdiv.style.top = (y + totalOffset).toString() + "px";
+                    childdiv.style.left = (x + totalOffset).toString() + "px";
+
+                    var childdivSon = document.createElement('div');
+                    childdivSon.className = 'game_carousel_circle_son';
+                    childdivSon.style.width = "100%";
+                    childdivSon.style.height = "100%";
+
+                    var childdivWord = document.createElement('div');
+                    childdivWord.className = 'game_carousel_circle_word';
+
+                    var $childdivWordType = $("<div class='game_carousel_circle_wordtype'></div>");
+                    var $childdivWordRate = $("<div class='game_carousel_circle_wordrate'><span class='game_carousel_circle_rate'></span><span class='game_carousel_circle_percent'>%</span></div>");
+
+
+                    $(childdivWord).append($childdivWordRate);
+                    $(childdivWord).append($childdivWordType);
+
+                    childdiv.appendChild(childdivSon);
+                    childdiv.appendChild(childdivWord);
+                    input.appendChild(childdiv);
+                }
+            };
+
+            ET5.ETGame.Master.GameCarousel.prototype.carouselGo = function () {
+                "use strict";
+                var input = this.input
+                $(input).trigger("beforeAnimation");
+                $(input).css("display", "block");
+                $(input).find('#game_carousel_circle_1').addClass("flicker0");
+            }
+
+            ET5.ETGame.Master.GameCarousel.prototype.setItem = function (obj, type) {
+                "use strict";
+                $.each($(".game_carousel_circle"), function (i, e) {
+                    if (obj[i].itemCheck == "Y") {
+                        $(e).addClass("stopthis");
+                    }
+                    if (type === "increasePercent") {
+                        var num = obj[i].itemValue - 100 <= 0 ? "-" + Math.abs(obj[i].itemValue - 100) : "+" + (obj[i].itemValue - 100);
+                        $(e).find(".game_carousel_circle_wordrate > .game_carousel_circle_rate").text(num);
+                    } else {
+                        $(e).find(".game_carousel_circle_wordrate > .game_carousel_circle_rate").text(obj[i].itemValue / 100);
+                        $(e).find(".game_carousel_circle_wordrate > .game_carousel_circle_percent").text("倍");
+                    }
+                    $(e).find(".game_carousel_circle_wordtype").text(obj[i].itemType);
+                });
+            }
+
+            if (!$input.data("GameCarousel")) {
+                _init();
+                _bindAnimationEvent();
+                $input.data("GameCarousel", self);
+            };
+        },
+        /**
+         * 動畫物件
+         * @namespace ET5.ETGame.Master.AnimationStage
+         * @class
+         * 
+         * @param {Object} input 初始化DOM元素
+         * @param {Object} spriteSheets 動畫影格設定
+         * @param {spriteSheetsSetting} spriteSheets.squib 爆破動畫
+         * @param {spriteSheetsSetting} spriteSheets.lightning 爆破動畫
+         */
+        /**
+         * 動畫影格設定
+         * @typedef {Object} spriteSheetsSetting
+         * @property {String} src 圖片路徑
+         * @property {Number} width 寬度
+         * @property {Number} height 高度
+         * @property {Number} row 列數
+         * @property {Number} column 行數
+         * @property {Number} fps 每秒影格
+         * @property {Number} count 影格數
+         */
+        AnimationStage: function (input, spriteSheets) {
+            "use strict";
+            var self = this;
+            var $input = $(input);
+            var images = {};
+            var contextVFX = input.getContext("2d");
+            var ifImage = false;
+            var vfxIndex = 0;
+            //var myTimer;
+            //var c = 0;
+            var spriteSheets = {
+                squib: {
+                    src: "/wwwroot/images/burst.png",
+                    width: 600,
+                    height: 350,
+                    row: 8,
+                    column: 4,
+                    fps: 24,
+                    count: 32,
+                    f_loop: 1,
+                    s_loop: 1
+                }, 
+                lightning: {
+                    src: "/wwwroot/images/light.png",
+                    width: 320,
+                    height: 390,
+                    row: 5,
+                    column: 9,
+                    fps: 30,
+                    count: 45,
+                    f_loop: 1,
+                    s_loop: 1
+                }, 
+                bigbang: {
+                    src: "/wwwroot/images/bigbang.png",
+                    width: 700,
+                    height: 390,
+                    row: 8,
+                    column: 5,
+                    fps: 30,
+                    count: 40,
+                    f_loop: 3,
+                    s_loop: 3
+                },
+                Boom: {
+                    src: "/wwwroot/images/Boom.png",
+                    width: 700,
+                    height: 390,
+                    row: 8,
+                    column: 5,
+                    fps: 30,
+                    count: 40,
+                    f_loop: 3,
+                    s_loop: 3
+                },
+                Cyclone: {
+                    src: "/wwwroot/images/Cyclone.png",
+                    width: 700,
+                    height: 390,
+                    row: 8,
+                    column: 5,
+                    fps: 30,
+                    count: 40,
+                    f_loop: 3,
+                    s_loop: 3
+                },
+                Explosion: {
+                    src: "/wwwroot/images/Explosion.png",
+                    width: 700,
+                    height: 480,
+                    row: 8,
+                    column: 5,
+                    fps: 30,
+                    count: 40,
+                    f_loop: 3,
+                    s_loop: 3
+                },
+                Fire: {
+                    src: "/wwwroot/images/Fire.png",
+                    width: 700,
+                    height: 390,
+                    row: 8,
+                    column: 5,
+                    fps: 30,
+                    count: 40,
+                    f_loop: 3,
+                    s_loop: 3
+                },
+                FireBurst: {
+                    src: "/wwwroot/images/FireBurst.png",
+                    width: 700,
+                    height: 480,
+                    row: 8,
+                    column: 5,
+                    fps: 30,
+                    count: 40,
+                    f_loop: 3,
+                    s_loop: 3
+                },
+                HolyBlast: {
+                    src: "/wwwroot/images/HolyBlast.png",
+                    width: 700,
+                    height: 390,
+                    row: 8,
+                    column: 5,
+                    fps: 30,
+                    count: 40,
+                    f_loop: 3,
+                    s_loop: 3
+                },
+                Landmine: {
+                    src: "/wwwroot/images/Landmine.png",
+                    width: 700,
+                    height: 480,
+                    row: 8,
+                    column: 5,
+                    fps: 30,
+                    count: 40,
+                    f_loop: 3,
+                    s_loop: 3
+                },
+                light02: {
+                    src: "/wwwroot/images/light02.png",
+                    width: 700,
+                    height: 390,
+                    row: 8,
+                    column: 5,
+                    fps: 30,
+                    count: 40,
+                    f_loop: 3,
+                    s_loop: 3
+                },
+                Spark: {
+                    src: "/wwwroot/images/Spark.png",
+                    width: 700,
+                    height: 390,
+                    row: 8,
+                    column: 5,
+                    fps: 30,
+                    count: 40,
+                    f_loop: 3,
+                    s_loop: 3
+                },
+                Spurt: {
+                    src: "/wwwroot/images/Spurt.png",
+                    width: 700,
+                    height: 480,
+                    row: 8,
+                    column: 5,
+                    fps: 30,
+                    count: 40,
+                    f_loop: 3,
+                    s_loop: 3
+                }
+            };
+
+            var _loadSpriteSheets = function (spriteSheets, images) {
+                var numLoadedImages = 0;
+                var numImages = 0;
+                var sprite;
+
+                // get number of sprite sheets
+                for (sprite in spriteSheets) {
+                    numImages++;
+                };
+
+                for (sprite in spriteSheets) {
+                    // initialize parameters
+                    spriteSheets[sprite].interval = 1000 / spriteSheets[sprite].fps;
+                    spriteSheets[sprite].numSprites = spriteSheets[sprite].row * spriteSheets[sprite].column;
+
+                    images[sprite] = new Image();
+                    images[sprite].onload = function () {
+                        // check if images are all loaded
+                        if (++numLoadedImages >= numImages) {
+                            ifImage = true;
+                            $(input).trigger("imageLoaded");
+                            //document.getElementById("message").innerHTML = "Loading VFX Complete!";
+                        };
+                    };
+                    images[sprite].src = spriteSheets[sprite].src;
+                };
+            };
+            var _init = function () {
+                _loadSpriteSheets(spriteSheets, images);
+            };
+
+            var _drawSprite = function (spriteSheet, image, type) {
+                setTimeout(function () {
+
+                    // clear canvas
+                    contextVFX.clearRect(0, 0, $(input).width(), $(input).height());
+                    var sx = (vfxIndex % spriteSheet.column) * spriteSheet.width;
+                    var sy = Math.floor(vfxIndex / spriteSheet.column) * spriteSheet.height;
+                    var x = ($(input).width() - spriteSheet.width) / 2;
+                    var y = ($(input).height() - spriteSheet.height) / 2;
+
+                    contextVFX.drawImage(image, sx, sy, spriteSheet.width, spriteSheet.height, x, y, spriteSheet.width, spriteSheet.height);
+
+                    // if next frame exists, draw it
+                    if (vfxIndex++ < spriteSheet.numSprites) {
+                        window.requestAnimationFrame(function (timestamp) {
+                            _drawSprite(spriteSheet, image, type);
+                        });
+                    } else {
+                        vfxIndex = 0;
+                        spriteSheet.f_loop = spriteSheet.f_loop - 1
+
+                        if (spriteSheet.f_loop >= 1) {
+                            _drawSprite(spriteSheet, image, type);
+                        } else {
+                            $(input).trigger("afterAnimation", { "type": type });
+                            spriteSheet.f_loop = spriteSheet.s_loop;
+                        }
+                    };
+                }, spriteSheet.interval);
+            };
+
+            self.attack = function (type) {
+                if (ifImage === true && vfxIndex === 0) {
+                    window.requestAnimationFrame(function (timestamp) {
+                        $(input).trigger("beforeAnimation", { "time": spriteSheets[type].count * (1000 / spriteSheets[type].fps), "type": type });
+                        _drawSprite(spriteSheets[type], images[type], type)
+                    });
+                };
+            };
+
+            if (!$input.data("AnimationStage")) {
+                _init();
+                $input.data("AnimationStage", self);
+            };
+        },
+        /**
+         * 重複視窗判斷
+         * @namespace ET5.ETGame.Master.CheckWindows
+         * @class
+         */
+        CheckWindows: function () {
+            "use strict";
+            var self = this;
+            self.isRepeat = false;
+            var _init = function () {
+                var uID = _getUID();
+                if (uID === null) {
+                    uID = _newUID();
+                    _setUID(uID);
+                };
+
+
+                var GameChecker = new _GameChecker();
+                var CheckStandard = GameChecker.getChecker();
+                if (CheckStandard === null) {
+                    _updateChecker(uID, GameChecker);
+                    self.isRepeat = false;
+                } else {
+                    // 過期
+                    if (new Date().valueOf() > CheckStandard.expire) {
+                        _updateChecker(uID, GameChecker);
+                        self.isRepeat = false;
+                    } else {
+                        if (CheckStandard.uID == uID) {
+                            _updateChecker(uID, GameChecker);
+                            self.isRepeat = false;
+                        } else {
+                            self.isRepeat = true;
+                        };
+                    };
+                };
+            };
+
+            var _updateChecker = function (uID, GameChecker) {
+                var CheckStandard = GameChecker.createNewChecker(uID);
+                GameChecker.setChecker(CheckStandard);
+                setTimeout(function () {
+                    _updateChecker(uID, GameChecker);
+                }, 1000);
+
+            };
+
+            var _getUID = function () {
+                return window.sessionStorage.getItem("uID");
+            };
+
+            var _newUID = function () {
+                return new Date().valueOf().toString();
+            };
+
+            var _setUID = function (val) {
+                window.sessionStorage.setItem("uID", val);
+            };
+
+            var _GameChecker = function (uID) {
+                var self = this;
+                self.createNewChecker = function (uID) {
+                    // console.log(new Date().valueOf());
+                    var obj = { "uID": uID, "missionId": 1, "expire": (new Date().valueOf() + 3000) };
+                    return JSON.stringify(obj);
+                };
+
+                self.getChecker = function () {
+                    return JSON.parse(window.localStorage.getItem("checker"));
+                };
+                self.setChecker = function (obj) {
+                    window.localStorage.setItem("checker", obj);
+                };
+            };
+
+            self.removeChecker = function () {
+                window.localStorage.removeItem("checker");
+                window.sessionStorage.removeItem("uID");
+            };
+
+            _init();
+        }
+    },
+    /**
+     * 工具程式
+     * @namespace ET5.ETGame.Library
+     */
+    Library: {
+        /**
+         * 設定文字(瀏覽器相容性判斷)
+         * @name ET5.ETGame.Library#setText
+         * @method
+         * 
+         * @param {Object} target 要設定的容器
+         * @param {String} value 要設定的值
+         */
+        setText: function (target, value) {
+            if (target.innerText) { //For IE/Chrome
+                target.innerText = value;
+            } else { //For IE9+/Chrome/FF
+                target.textContent = value;
+            }
+        }
+    }
+};
+
+$(function () {
+    var ETgame_CheckWindows = new ET5.ETGame.Master.CheckWindows();
+    if (ETgame_CheckWindows.isRepeat) {
+        ET5.ETGame.Master.windowSimpleMsg("您已開啟另一個遊戲視窗，請關閉此視窗。");
+    };
+
+    //阻擋選取元素
+    $("body").on("selectstart", function (e) {
+        return false;
+    });
+});
