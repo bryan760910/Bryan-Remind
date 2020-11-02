@@ -1,0 +1,17 @@
+import asyncio
+import websockets
+
+connections = set()
+connections.add('wss://api.toreba.net/ws/msg/621202')
+connections.add('wss://api.toreba.net/ws/msg/421010')
+
+async def handle_socket(uri, ):
+    async with websockets.connect(uri) as websocket:
+        async for message in websocket:
+            print(uri)
+            print(message)
+
+async def handler():
+    await asyncio.wait([handle_socket(uri) for uri in connections])
+
+asyncio.get_event_loop().run_until_complete(handler())
