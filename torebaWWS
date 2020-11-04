@@ -1,15 +1,60 @@
 import asyncio
 import websockets
-
+import json
+import time
 connections = set()
-connections.add('wss://api.toreba.net/ws/msg/621202')
+connections.add('wss://api.toreba.net/ws/msg/421009')
+# connections.add('wss://api.toreba.net/ws/msg/421008')
+# connections.add('wss://api.toreba.net/ws/msg/421001')
+# connections.add('wss://api.toreba.net/ws/msg/421004')
+# connections.add('wss://api.toreba.net/ws/msg/421007')
 connections.add('wss://api.toreba.net/ws/msg/421010')
+# connections.add('wss://api.toreba.net/ws/msg/421006')
+# connections.add('wss://api.toreba.net/ws/msg/421005')
+# connections.add('wss://api.toreba.net/ws/msg/421003')
+# connections.add('wss://api.toreba.net/ws/msg/421002')
+connections.add('wss://api.toreba.net/ws/msg/621203')
+connections.add('wss://api.toreba.net/ws/msg/621202')
+
+mdict = {
+    "wss://api.toreba.net/ws/msg/421009" : { "getList" : [], "getPercent" : 0 },
+    # "wss://api.toreba.net/ws/msg/421008" : { "getList" : [], "getPercent" : 0 },
+    # "wss://api.toreba.net/ws/msg/421001" : { "getList" : [], "getPercent" : 0 },
+    # "wss://api.toreba.net/ws/msg/421004" : { "getList" : [], "getPercent" : 0 },
+    # "wss://api.toreba.net/ws/msg/421007" : { "getList" : [], "getPercent" : 0 },
+    "wss://api.toreba.net/ws/msg/421010" : { "getList" : [], "getPercent" : 0 },
+    # "wss://api.toreba.net/ws/msg/421006" : { "getList" : [], "getPercent" : 0 },
+    # "wss://api.toreba.net/ws/msg/421005" : { "getList" : [], "getPercent" : 0 },
+    # "wss://api.toreba.net/ws/msg/421003" : { "getList" : [], "getPercent" : 0 },
+    # "wss://api.toreba.net/ws/msg/421002" : { "getList" : [], "getPercent" : 0 },
+    "wss://api.toreba.net/ws/msg/621203" : { "getList" : [], "getPercent" : 0 },
+    "wss://api.toreba.net/ws/msg/621202" : { "getList" : [], "getPercent" : 0 },
+    
+}
 
 async def handle_socket(uri, ):
+
     async with websockets.connect(uri) as websocket:
         async for message in websocket:
-            print(uri)
-            print(message)
+            d = json.loads( message )
+            if d.get('data'):
+                if d.get('data').get("is_playing") == True:
+                    if mdict.get(uri):
+                        mdict[uri]["getList"].append(0)
+                if d.get('data').get("prizeGetStatus") == True:
+                    if mdict.get(uri):
+                        mdict[uri]["getList"][-1] = 1
+                if d.get('data').get("is_playing") == False:
+                    if mdict.get(uri):
+                        mdict[uri]["getPercent"] = "%f %s" % (round(mdict[uri]["getList"].count(1) / len(mdict[uri]["getList"]), 2) * 100 , "%")
+
+                print("=======================================================")
+                print(uri)
+                print(mdict)
+                print("=======================================================")
+
+            
+            
 
 async def handler():
     await asyncio.wait([handle_socket(uri) for uri in connections])
